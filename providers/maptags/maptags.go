@@ -74,21 +74,43 @@ func Provider(ctx context.Context, cfg *viper.Viper) (providers.ContextTagger, e
 }
 
 func (m *MapTags) GetMetadata() (metadata.MD, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	md, ok := m.data["metadata"].(metadata.MD)
 	return md, ok
 }
 
 func (m *MapTags) GetMethod() (string, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	method, ok := m.data["method"].(string)
 	return method, ok
 }
 
 func (m *MapTags) GetContextID() (string, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	contextID, ok := m.data["context_id"].(string)
 	return contextID, ok
 }
 
 func (m *MapTags) GetError() (error, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	err, ok := m.data["error"].(error)
 	return err, ok
+}
+
+func (m *MapTags) Get(key string) (any, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	val, ok := m.data[key]
+	return val, ok
+}
+
+func (m *MapTags) Set(key string, value any) providers.Tags {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.data[key] = value
+	return m
 }

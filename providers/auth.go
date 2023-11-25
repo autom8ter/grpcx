@@ -9,7 +9,7 @@ import (
 
 // Auth is an interface for authentication
 type Auth interface {
-	// Auth returns an auth function that authenticates requests
+	// Auth returns an auth function that authenticates/authorizes requests
 	Auth(cfg *viper.Viper, all All) grpc_auth.AuthFunc
 }
 

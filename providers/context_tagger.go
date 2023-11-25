@@ -37,6 +37,10 @@ type Tags interface {
 	GetContextID() (string, bool)
 	// GetError returns the error from the tags
 	GetError() (error, bool)
+	// Set sets the value for the given key
+	Set(key string, value any) Tags
+	// Get returns the value for the given key
+	Get(key string) (any, bool)
 }
 
 // GetTags returns the tags from the context

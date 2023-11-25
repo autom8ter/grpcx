@@ -57,16 +57,7 @@ func (m *EchoRequest) validate(all bool) error {
 
 	var errors []error
 
-	if utf8.RuneCountInString(m.GetMessage()) < 3 {
-		err := EchoRequestValidationError{
-			field:  "Message",
-			reason: "value length must be at least 3 runes",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
+	// no validation rules for Message
 
 	if len(errors) > 0 {
 		return EchoRequestMultiError(errors)

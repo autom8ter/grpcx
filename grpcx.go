@@ -56,6 +56,7 @@ type ServiceRegistrationConfig struct {
 	Config      *viper.Viper
 	GrpcServer  *grpc.Server
 	RestGateway *runtime.ServeMux
+	Providers   providers.All
 }
 
 // Service is a an interface that registers a service with the server
@@ -322,6 +323,7 @@ func (s *Server) Serve(ctx context.Context, services ...Service) error {
 		Config:      s.cfg,
 		GrpcServer:  srv,
 		RestGateway: gwMux,
+		Providers:   s.providers,
 	}
 	for _, service := range services {
 		if err := service.Register(ctx, serviceConfig); err != nil {

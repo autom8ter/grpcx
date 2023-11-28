@@ -43,7 +43,7 @@ type serverOpt struct {
 	Cache              providers.CacheProvider
 	Stream             providers.StreamProvider
 	Auth               providers.Auth
-	Authz              authorizer.Authorizer
+	Authz              []authorizer.Authorizer
 	Tagger             providers.ContextTaggerProvider
 	RateLimit          providers.RateLimiterProvider
 	Metrics            providers.MetricsProvider
@@ -138,10 +138,10 @@ func WithAuth(auth providers.Auth) ServerOption {
 	}
 }
 
-// WithAuthz adds an authorizer to the server (see github.com/autom8ter/protoc-gen-authorize)
-func WithAuthz(authorizer authorizer.Authorizer) ServerOption {
+// WithAuthz adds the authorizers to the server (see github.com/autom8ter/protoc-gen-authorize)
+func WithAuthz(authorizers ...authorizer.Authorizer) ServerOption {
 	return func(opt *serverOpt) {
-		opt.Authz = authorizer
+		opt.Authz = authorizers
 	}
 }
 
@@ -270,7 +270,7 @@ func NewServer(ctx context.Context, cfg *viper.Viper, opts ...ServerOption) (*Se
 			sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, grpc_auth.UnaryServerInterceptor(sopts.Auth.Auth(cfg, prviders)))
 			sopts.StreamInterceptors = append(sopts.StreamInterceptors, grpc_auth.StreamServerInterceptor(sopts.Auth.Auth(cfg, prviders)))
 		}
-		if sopts.Authz != nil {
+		if len(sopts.Authz) > 0 {
 			sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, authorizer.UnaryServerInterceptor(sopts.Authz))
 			sopts.StreamInterceptors = append(sopts.StreamInterceptors, authorizer.StreamServerInterceptor(sopts.Authz))
 		}

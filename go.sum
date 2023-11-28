@@ -52,8 +52,8 @@ github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a h1:HbKu58rmZp
 github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a/go.mod h1:SGnFV6hVsYE877CKEZ6tDNTjaSXYUk6QqoIK6PrAtcc=
 github.com/alicebob/miniredis/v2 v2.31.0 h1:ObEFUNlJwoIiyjxdrYF0QIDE7qXcLc7D3WpSH4c22PU=
 github.com/alicebob/miniredis/v2 v2.31.0/go.mod h1:UB/T2Uztp7MlFSDakaX1sTXUv5CASoprx0wulRT6HBg=
-github.com/autom8ter/protoc-gen-authorize v0.2.1 h1:laoSStI4yqliR0Czgd/QlT2xv0FeyF8u/c7hXZVNVvI=
-github.com/autom8ter/protoc-gen-authorize v0.2.1/go.mod h1:sHySvgwx7k3s1gMNkwhggNFjUMQRLb8RYTFF4lcDKCY=
+github.com/autom8ter/protoc-gen-authorize v0.3.0 h1:U2MpFfjaATQxN3C34lKD+3CSF9cm92JvpZRiFv5RQCo=
+github.com/autom8ter/protoc-gen-authorize v0.3.0/go.mod h1:sHySvgwx7k3s1gMNkwhggNFjUMQRLb8RYTFF4lcDKCY=
 github.com/benbjohnson/clock v1.1.0/go.mod h1:J11/hYXuz8f4ySSvYwY0FKfm+ezbsZBKZxNJlLklBHA=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=

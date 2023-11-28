@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/autom8ter/protoc-gen-authorize/authorizer"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/auth"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
@@ -42,6 +43,7 @@ type serverOpt struct {
 	Cache              providers.CacheProvider
 	Stream             providers.StreamProvider
 	Auth               providers.Auth
+	Authz              authorizer.Authorizer
 	Tagger             providers.ContextTaggerProvider
 	RateLimit          providers.RateLimiterProvider
 	Metrics            providers.MetricsProvider
@@ -133,6 +135,13 @@ func WithContextTagger(tagger providers.ContextTaggerProvider) ServerOption {
 func WithAuth(auth providers.Auth) ServerOption {
 	return func(opt *serverOpt) {
 		opt.Auth = auth
+	}
+}
+
+// WithAuthz adds an authorizer to the server (see github.com/autom8ter/protoc-gen-authorize)
+func WithAuthz(authorizer authorizer.Authorizer) ServerOption {
+	return func(opt *serverOpt) {
+		opt.Authz = authorizer
 	}
 }
 
@@ -260,6 +269,10 @@ func NewServer(ctx context.Context, cfg *viper.Viper, opts ...ServerOption) (*Se
 		if sopts.Auth != nil {
 			sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, grpc_auth.UnaryServerInterceptor(sopts.Auth.Auth(cfg, prviders)))
 			sopts.StreamInterceptors = append(sopts.StreamInterceptors, grpc_auth.StreamServerInterceptor(sopts.Auth.Auth(cfg, prviders)))
+		}
+		if sopts.Authz != nil {
+			sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, authorizer.UnaryServerInterceptor(sopts.Authz))
+			sopts.StreamInterceptors = append(sopts.StreamInterceptors, authorizer.StreamServerInterceptor(sopts.Authz))
 		}
 
 		sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, grpc_validator.UnaryServerInterceptor())

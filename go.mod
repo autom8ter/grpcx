@@ -4,7 +4,7 @@ go 1.21.4
 
 require (
 	github.com/alicebob/miniredis/v2 v2.31.0
-	github.com/autom8ter/protoc-gen-authorize v0.4.0
+	github.com/autom8ter/protoc-gen-authorize v0.6.0
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/golang-migrate/migrate/v4 v4.16.2
 	github.com/google/uuid v1.4.0

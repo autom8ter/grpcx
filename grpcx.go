@@ -132,7 +132,7 @@ func WithContextTagger(tagger providers.ContextTaggerProvider) ServerOption {
 	}
 }
 
-// WithAuth adds an auth provider to the server
+// WithAuth adds an auth provider to the server (see github.com/autom8ter/protoc-gen-authenticate)
 func WithAuth(auth grpc_auth.AuthFunc) ServerOption {
 	return func(opt *serverOpt) {
 		opt.Auth = auth
@@ -185,7 +185,17 @@ func WithCustomHTTPRoute(method, path string, handler runtime.HandlerFunc) Serve
 	}
 }
 
-// Server is a grpc server with a rest-gateway
+// Server is a highly configurable grpc server with a built-in rest-gateway(grpc-gateway)
+// The server supports the following features via ServerOptions:
+// - Logging Interface (slog)
+// - Metrics Interface (prometheus)
+// - Database Interface (sqlite/mysql/postgres)
+// - Cache Interface (redis)
+// - Stream Interface (nats/redis)
+// - Context Tags
+// - Authentication (see github.com/autom8ter/protoc-gen-authenticate)
+// - Authorization (see github.com/autom8ter/protoc-gen-authorize)
+// - Rate Limiting (see github.com/autom8ter/protoc-gen-ratelimit)
 type Server struct {
 	cfg         *viper.Viper
 	providers   providers.All

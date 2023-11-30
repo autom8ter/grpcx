@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/autom8ter/protoc-gen-authorize/authorizer"
+	"github.com/autom8ter/protoc-gen-ratelimit/limiter"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/auth"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
@@ -42,10 +43,10 @@ type serverOpt struct {
 	Database           providers.DatabaseProvider
 	Cache              providers.CacheProvider
 	Stream             providers.StreamProvider
-	Auth               providers.Auth
+	Auth               grpc_auth.AuthFunc
 	Authz              []authorizer.Authorizer
 	Tagger             providers.ContextTaggerProvider
-	RateLimit          providers.RateLimiterProvider
+	RateLimit          limiter.Limiter
 	Metrics            providers.MetricsProvider
 	Handlers           []CustomHTTPRoute
 }
@@ -132,7 +133,7 @@ func WithContextTagger(tagger providers.ContextTaggerProvider) ServerOption {
 }
 
 // WithAuth adds an auth provider to the server
-func WithAuth(auth providers.Auth) ServerOption {
+func WithAuth(auth grpc_auth.AuthFunc) ServerOption {
 	return func(opt *serverOpt) {
 		opt.Auth = auth
 	}
@@ -145,8 +146,8 @@ func WithAuthz(authorizers ...authorizer.Authorizer) ServerOption {
 	}
 }
 
-// WithRateLimit adds a rate limiter to the server
-func WithRateLimit(rateLimit providers.RateLimiterProvider) ServerOption {
+// WithRateLimit adds a rate limiter to the server (see protoc-gen-ratelimit)
+func WithRateLimit(rateLimit limiter.Limiter) ServerOption {
 	return func(opt *serverOpt) {
 		opt.RateLimit = rateLimit
 	}
@@ -265,10 +266,13 @@ func NewServer(ctx context.Context, cfg *viper.Viper, opts ...ServerOption) (*Se
 
 		sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, providers.UnaryLoggingInterceptor(cfg.GetBool("logging.request_body"), log))
 		sopts.StreamInterceptors = append(sopts.StreamInterceptors, providers.StreamLoggingInterceptor(cfg.GetBool("logging.request_body"), log))
-
+		if sopts.RateLimit != nil {
+			sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, limiter.UnaryServerInterceptor(sopts.RateLimit))
+			sopts.StreamInterceptors = append(sopts.StreamInterceptors, limiter.StreamServerInterceptor(sopts.RateLimit))
+		}
 		if sopts.Auth != nil {
-			sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, grpc_auth.UnaryServerInterceptor(sopts.Auth.Auth(cfg, prviders)))
-			sopts.StreamInterceptors = append(sopts.StreamInterceptors, grpc_auth.StreamServerInterceptor(sopts.Auth.Auth(cfg, prviders)))
+			sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, grpc_auth.UnaryServerInterceptor(sopts.Auth))
+			sopts.StreamInterceptors = append(sopts.StreamInterceptors, grpc_auth.StreamServerInterceptor(sopts.Auth))
 		}
 		if len(sopts.Authz) > 0 {
 			sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, authorizer.UnaryServerInterceptor(sopts.Authz))
@@ -277,15 +281,6 @@ func NewServer(ctx context.Context, cfg *viper.Viper, opts ...ServerOption) (*Se
 
 		sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, grpc_validator.UnaryServerInterceptor())
 		sopts.StreamInterceptors = append(sopts.StreamInterceptors, grpc_validator.StreamServerInterceptor())
-
-		if sopts.RateLimit != nil {
-			rl, err := sopts.RateLimit(ctx, cfg)
-			if err != nil {
-				return nil, stacktrace.Propagate(err, "failed to create rate limiter")
-			}
-			sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, providers.UnaryRateLimitInterceptor(rl))
-			sopts.StreamInterceptors = append(sopts.StreamInterceptors, providers.StreamRateLimitInterceptor(rl))
-		}
 
 		sopts.StreamInterceptors = append(sopts.StreamInterceptors, grpc_recovery.StreamServerInterceptor())
 		sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, grpc_recovery.UnaryServerInterceptor())

@@ -14,7 +14,6 @@ import (
 	"github.com/autom8ter/grpcx"
 	echov1 "github.com/autom8ter/grpcx/gen/echo"
 	"github.com/autom8ter/grpcx/grpcxtest"
-	"github.com/autom8ter/grpcx/providers/basicauth"
 	"github.com/autom8ter/grpcx/providers/maptags"
 	redis2 "github.com/autom8ter/grpcx/providers/redis"
 	slog2 "github.com/autom8ter/grpcx/providers/slog"
@@ -74,8 +73,6 @@ func ExampleNewServer() {
 	srv, err := grpcx.NewServer(
 		ctx,
 		cfg,
-		// Register Auth provider
-		grpcx.WithAuth(basicauth.New()),
 		// Register Cache Provider
 		grpcx.WithCache(redis2.InMemProvider),
 		// Register Stream Provider

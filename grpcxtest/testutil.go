@@ -45,7 +45,7 @@ func (f *Fixture) RunTest(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), f.Timeout)
 	defer cancel()
 	if f.Config == nil {
-		cfg, err := grpcx.NewConfig()
+		cfg, err := grpcx.LoadConfig("test-api", "", "TEST_API")
 		require.NoError(t, err)
 		f.Config = cfg
 	}

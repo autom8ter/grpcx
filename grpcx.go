@@ -25,11 +25,9 @@ import (
 	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/health/grpc_health_v1"
 
-	echov1 "github.com/autom8ter/grpcx/gen/echo"
+	"github.com/autom8ter/grpcx/internal/utils"
 	"github.com/autom8ter/grpcx/providers"
 	"github.com/autom8ter/grpcx/providers/maptags"
 	slog2 "github.com/autom8ter/grpcx/providers/slog"
@@ -49,6 +47,7 @@ type serverOpt struct {
 	RateLimit          limiter.Limiter
 	Metrics            providers.MetricsProvider
 	Handlers           []CustomHTTPRoute
+	GrpcHealthCheck    grpc_health_v1.HealthServer
 }
 
 // ServerOption is a function that configures the server. All ServerOptions are optional.
@@ -155,8 +154,11 @@ func WithRateLimit(rateLimit limiter.Limiter) ServerOption {
 
 // CustomHTTPRoute is a custom route that can be added to the rest-gateway
 type CustomHTTPRoute struct {
-	Method  string
-	Path    string
+	// Method is the http method
+	Method string
+	// Path is the http path
+	Path string
+	// Handler is the http handler
 	Handler runtime.HandlerFunc
 }
 
@@ -185,6 +187,13 @@ func WithCustomHTTPRoute(method, path string, handler runtime.HandlerFunc) Serve
 	}
 }
 
+// WithGrpcHealthCheck adds a grpc health check to the server
+func WithGrpcHealthCheck(srv grpc_health_v1.HealthServer) ServerOption {
+	return func(opt *serverOpt) {
+		opt.GrpcHealthCheck = srv
+	}
+}
+
 // Server is a highly configurable grpc server with a built-in rest-gateway(grpc-gateway)
 // The server supports the following features via ServerOptions:
 // - Logging Interface (slog)
@@ -198,6 +207,7 @@ func WithCustomHTTPRoute(method, path string, handler runtime.HandlerFunc) Serve
 // - Rate Limiting (see github.com/autom8ter/protoc-gen-ratelimit)
 type Server struct {
 	cfg         *viper.Viper
+	health      grpc_health_v1.HealthServer
 	providers   providers.All
 	grpcOpts    []grpc.ServerOption
 	gatewayOpts []runtime.ServeMuxOption
@@ -221,7 +231,7 @@ func NewServer(ctx context.Context, cfg *viper.Viper, opts ...ServerOption) (*Se
 	}
 	log, err := sopts.Logger(ctx, cfg)
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "failed to create logger")
+		return nil, utils.WrapError(err, "failed to create logger")
 	}
 	prviders := providers.All{
 		Logger: log,
@@ -230,12 +240,12 @@ func NewServer(ctx context.Context, cfg *viper.Viper, opts ...ServerOption) (*Se
 	if sopts.Database != nil {
 		db, err := sopts.Database(ctx, cfg)
 		if err != nil {
-			return nil, stacktrace.Propagate(err, "failed to create database")
+			return nil, utils.WrapError(err, "failed to create database")
 		}
 		// create schema
 		if cfg.GetBool("database.migrate") {
 			if err := db.Migrate(ctx); err != nil {
-				return nil, stacktrace.Propagate(err, "failed to migrate database")
+				return nil, utils.WrapError(err, "failed to migrate database")
 			}
 		}
 		prviders.Database = db
@@ -243,14 +253,14 @@ func NewServer(ctx context.Context, cfg *viper.Viper, opts ...ServerOption) (*Se
 	if sopts.Cache != nil {
 		cahe, err := sopts.Cache(ctx, cfg)
 		if err != nil {
-			return nil, stacktrace.Propagate(err, "failed to create cache")
+			return nil, utils.WrapError(err, "failed to create cache")
 		}
 		prviders.Cache = cahe
 	}
 	if sopts.Stream != nil {
 		que, err := sopts.Stream(ctx, cfg)
 		if err != nil {
-			return nil, stacktrace.Propagate(err, "failed to create stream")
+			return nil, utils.WrapError(err, "failed to create stream")
 		}
 		prviders.Stream = que
 	}
@@ -258,7 +268,7 @@ func NewServer(ctx context.Context, cfg *viper.Viper, opts ...ServerOption) (*Se
 	{
 		tags, err := sopts.Tagger(ctx, cfg)
 		if err != nil {
-			return nil, stacktrace.Propagate(err, "failed to create context tagger")
+			return nil, utils.WrapError(err, "failed to create context tagger")
 		}
 		// context_tagger interceptor must be first
 		sopts.UnaryInterceptors = append([]grpc.UnaryServerInterceptor{providers.UnaryContextTaggerInterceptor(tags)}, sopts.UnaryInterceptors...)
@@ -267,7 +277,7 @@ func NewServer(ctx context.Context, cfg *viper.Viper, opts ...ServerOption) (*Se
 		if sopts.Metrics != nil {
 			metrics, err := sopts.Metrics(ctx, cfg)
 			if err != nil {
-				return nil, stacktrace.Propagate(err, "failed to create metrics")
+				return nil, utils.WrapError(err, "failed to create metrics")
 			}
 			prviders.Metrics = metrics
 			sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, providers.UnaryMetricsInterceptor(metrics))
@@ -306,6 +316,7 @@ func NewServer(ctx context.Context, cfg *viper.Viper, opts ...ServerOption) (*Se
 	s.gatewayOpts = sopts.GatewayOpts
 	s.providers = prviders
 	s.httpRoutes = sopts.Handlers
+	s.health = sopts.GrpcHealthCheck
 	return s, nil
 }
 
@@ -334,7 +345,7 @@ func (s *Server) Serve(ctx context.Context, services ...Service) error {
 	gwMux := runtime.NewServeMux(s.gatewayOpts...)
 	for _, handler := range s.httpRoutes {
 		if err := gwMux.HandlePath(handler.Method, handler.Path, handler.Handler); err != nil {
-			return stacktrace.Propagate(err, "failed to register custom http route")
+			return utils.WrapError(err, "failed to register custom http route")
 		}
 	}
 	serviceConfig := ServiceRegistrationConfig{
@@ -345,12 +356,15 @@ func (s *Server) Serve(ctx context.Context, services ...Service) error {
 	}
 	for _, service := range services {
 		if err := service.Register(ctx, serviceConfig); err != nil {
-			return stacktrace.Propagate(err, "failed to register service")
+			return utils.WrapError(err, "failed to register service")
 		}
+	}
+	if s.health != nil {
+		grpc_health_v1.RegisterHealthServer(srv, s.health)
 	}
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%v", s.cfg.GetInt("api.port")))
 	if err != nil {
-		return stacktrace.Propagate(err, "failed to listen on port %v", s.cfg.GetInt("api.port"))
+		return utils.WrapError(err, "failed to listen on port %v", s.cfg.GetInt("api.port"))
 	}
 	defer lis.Close()
 
@@ -395,20 +409,20 @@ func (s *Server) Serve(ctx context.Context, services ...Service) error {
 		s.providers.Logger.Info(ctx, "starting grpc server", map[string]any{
 			"port": port,
 		})
-		return stacktrace.Propagate(srv.Serve(grpcMatcher), "")
+		return utils.WrapError(srv.Serve(grpcMatcher), "")
 	})
 	egp.Go(func() error {
 		s.providers.Logger.Info(ctx, "starting rest server", map[string]any{
 			"port": port,
 		})
-		return stacktrace.Propagate(server.Serve(restMatcher), "")
+		return utils.WrapError(server.Serve(restMatcher), "")
 	})
 	egp.Go(func() error {
 		m.Serve()
 		return nil
 	})
 	if err := egp.Wait(); err != nil && isServerFailure(err) {
-		return stacktrace.Propagate(err, "failed to serve")
+		return utils.WrapError(err, "failed to serve")
 	}
 	return nil
 }
@@ -430,74 +444,4 @@ func isServerFailure(err error) bool {
 		return false
 	}
 	return true
-}
-
-// LoadConfig loads a config file from the given path(if it exists) and sets defaults:
-// api.name: grpcx
-// api.port: 8080
-// logging.level: debug
-// logging.request_body: false
-// logging.tags: [method, context_id, error, metadata]
-// database.migrate: true
-// api.cors.enabled: false
-// api.cors.allowed_origins: [*]
-// api.cors.allowed_methods: [GET, POST, PUT, DELETE, OPTIONS, PATCH]
-// api.cors.allowed_headers: [*]
-// api.cors.exposed_headers: [*]
-// api.cors.allow_credentials: true
-func LoadConfig(filePath string) (*viper.Viper, error) {
-	v := viper.New()
-	if filePath != "" {
-		v.SetConfigFile(filePath)
-		if err := v.ReadInConfig(); err != nil {
-			return nil, stacktrace.Propagate(err, "failed to read config file")
-		}
-	}
-	v.SetEnvPrefix("GRPCX")
-	v.AutomaticEnv()
-	v.SetDefault("api.name", "grpcx")
-	v.SetDefault("api.port", 8080)
-	v.SetDefault("logging.level", "debug")
-	v.SetDefault("logging.tags", []string{"method", "context_id", "error"})
-	v.SetDefault("logging.request_body", false)
-	v.SetDefault("database.migrate", true)
-	v.SetDefault("api.cors.enabled", false)
-	v.SetDefault("api.cors.allowed_origins", []string{"*"})
-	v.SetDefault("api.cors.allowed_methods", []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"})
-	v.SetDefault("api.cors.allowed_headers", []string{"*"})
-	v.SetDefault("api.cors.exposed_headers", []string{"*"})
-	v.SetDefault("api.cors.allow_credentials", true)
-	return v, nil
-}
-
-// NewConfig creates a new config instance with the appropriate defaults
-func NewConfig() (*viper.Viper, error) {
-	return LoadConfig("")
-}
-
-type echoServer struct {
-	echov1.UnimplementedEchoServiceServer
-}
-
-func (e *echoServer) Echo(ctx context.Context, req *echov1.EchoRequest) (*echov1.EchoResponse, error) {
-	var meta = map[string]string{}
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return nil, status.Error(codes.Unauthenticated, "no metadata found in context")
-	}
-	for k, v := range md {
-		meta[k] = v[0]
-	}
-	return &echov1.EchoResponse{
-		Message:        req.Message,
-		ClientMetadata: meta,
-	}, nil
-}
-
-// EchoService returns a ServiceRegistration that registers an echo service
-func EchoService() ServiceRegistration {
-	return ServiceRegistration(func(ctx context.Context, cfg ServiceRegistrationConfig) error {
-		echov1.RegisterEchoServiceServer(cfg.GrpcServer, &echoServer{})
-		return nil
-	})
 }

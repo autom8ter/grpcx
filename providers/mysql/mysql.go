@@ -10,6 +10,7 @@ import (
 	"github.com/palantir/stacktrace"
 	"github.com/spf13/viper"
 
+	"github.com/autom8ter/grpcx/internal/utils"
 	"github.com/autom8ter/grpcx/providers"
 )
 
@@ -31,7 +32,7 @@ func (s mysql) Migrate(ctx context.Context) error {
 	if s.migrate == nil {
 		return nil
 	}
-	return stacktrace.Propagate(s.migrate.Up(), "")
+	return utils.WrapError(s.migrate.Up(), "")
 }
 
 // Close closes the database connection
@@ -52,13 +53,13 @@ func Provider(ctx context.Context, cfg *viper.Viper) (providers.Database, error)
 	}
 	conn, err := sql.Open("sqlite3", cfg.GetString("database.connection_string"))
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "failed to open database connection")
+		return nil, utils.WrapError(err, "failed to open database connection")
 	}
 	db := &mysql{conn: conn}
 	if path := cfg.GetString("database.migrations_source"); path != "" {
 		m, err := migrate.New(path, cfg.GetString("database.connection_string"))
 		if err != nil {
-			return nil, stacktrace.Propagate(err, "failed to create migration")
+			return nil, utils.WrapError(err, "failed to create migration")
 		}
 		db.migrate = m
 	}

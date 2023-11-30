@@ -32,7 +32,7 @@ func (m *Metrics) RegisterGauge(name string, labels ...string) {
 func (m *Metrics) RegisterHistogram(name string, labels ...string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, ok := m.gauges[name]; ok {
+	if _, ok := m.histograms[name]; ok {
 		return
 	}
 	m.histograms[name] = promauto.NewHistogramVec(prometheus.HistogramOpts{

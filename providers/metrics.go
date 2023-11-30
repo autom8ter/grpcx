@@ -57,7 +57,6 @@ func StreamMetricsInterceptor(metrics Metrics) grpc.StreamServerInterceptor {
 		err := handler(srv, ss)
 		if err != nil {
 			metrics.Inc("grpc_requests", info.FullMethod)
-			metrics.Observe("grpc_request_latency_seconds", time.Since(now).Seconds(), info.FullMethod)
 		} else {
 			metrics.Inc("grpc_requests", info.FullMethod)
 		}

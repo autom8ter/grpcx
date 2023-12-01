@@ -52,10 +52,10 @@ github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a h1:HbKu58rmZp
 github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a/go.mod h1:SGnFV6hVsYE877CKEZ6tDNTjaSXYUk6QqoIK6PrAtcc=
 github.com/alicebob/miniredis/v2 v2.31.0 h1:ObEFUNlJwoIiyjxdrYF0QIDE7qXcLc7D3WpSH4c22PU=
 github.com/alicebob/miniredis/v2 v2.31.0/go.mod h1:UB/T2Uztp7MlFSDakaX1sTXUv5CASoprx0wulRT6HBg=
-github.com/autom8ter/protoc-gen-authenticate v0.1.1 h1:kRm4IZGX6QPIBHkqIRIsV2xokNsrEOlEwiEFSzVCBdQ=
-github.com/autom8ter/protoc-gen-authenticate v0.1.1/go.mod h1:t6L2xKMwz72cc6cD4jJcU6Odr/p5CbMSioC2b61Ifps=
-github.com/autom8ter/protoc-gen-authorize v0.8.0 h1:Q0fDZfgxg6yawUFpRyZi5BCbK3YacOsxr4zLj/BUJ1E=
-github.com/autom8ter/protoc-gen-authorize v0.8.0/go.mod h1:rDOie221OFu9tj3DuDatqwju6Erwt26S+RNJ5Y9CDCg=
+github.com/autom8ter/protoc-gen-authenticate v0.1.3 h1:O+Cu9nwlElrOB6Uuxym1h/pA1xO20kgd+L+TZU6QE0g=
+github.com/autom8ter/protoc-gen-authenticate v0.1.3/go.mod h1:t6L2xKMwz72cc6cD4jJcU6Odr/p5CbMSioC2b61Ifps=
+github.com/autom8ter/protoc-gen-authorize v0.9.0 h1:4cle/kRhllsLlgF5HatVwNBJZennxzBasBrrNVg0C8A=
+github.com/autom8ter/protoc-gen-authorize v0.9.0/go.mod h1:FrCmjyjL+59Mxeg0iVDBT+vC/oKTLo9QjkIrARj3elY=
 github.com/autom8ter/protoc-gen-ratelimit v0.0.2 h1:U2wf9ZqhgHu/D19BrWrRa3HxPJ4VLqp4xrA4GuQ6E/M=
 github.com/autom8ter/protoc-gen-ratelimit v0.0.2/go.mod h1:w33/Eli+G6Sp4kvqCE3hAIqHDk5Q4beWgYJkDT4+BRo=
 github.com/benbjohnson/clock v1.1.0/go.mod h1:J11/hYXuz8f4ySSvYwY0FKfm+ezbsZBKZxNJlLklBHA=

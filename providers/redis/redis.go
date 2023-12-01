@@ -166,13 +166,13 @@ func StreamProvider(ctx context.Context, config *viper.Viper) (providers.Stream,
 	if db == 0 {
 		db = config.GetInt("cache.db")
 	}
-	if addr == "" || password == "" || db == 0 {
+	if addr == "" {
 		return nil, fmt.Errorf("configuration missing for redis stream provider(stream.addr, stream.password, stream.db)")
 	}
 	client := redis.NewClient(&redis.Options{
-		Addr:     config.GetString("cache.addr"),
-		Password: config.GetString("cache.password"),
-		DB:       config.GetInt("cache.db"),
+		Addr:     addr,
+		Password: password,
+		DB:       db,
 	})
 	return NewRedis(client), nil
 }
@@ -186,7 +186,7 @@ func InMemProvider(ctx context.Context, config *viper.Viper) (providers.Cache, e
 	client := redis.NewClient(&redis.Options{
 		Addr:     mr.Addr(),
 		Password: config.GetString("cache.password"),
-		DB:       config.GetInt("cache.password"),
+		DB:       config.GetInt("cache.db"),
 	})
 	return NewRedis(client), nil
 }

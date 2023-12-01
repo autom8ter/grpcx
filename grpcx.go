@@ -53,20 +53,20 @@ type serverOpt struct {
 	GatewayOpts        []runtime.ServeMuxOption
 	UnaryInterceptors  []grpc.UnaryServerInterceptor
 	StreamInterceptors []grpc.StreamServerInterceptor
-	Logger             providers.LoggingProvider
-	Database           providers.DatabaseProvider
-	Cache              providers.CacheProvider
-	Stream             providers.StreamProvider
-	Email              providers.EmailProvider
+	Logger             providers.Logger
+	Database           providers.Database
+	Cache              providers.Cache
+	Stream             providers.Stream
+	Email              providers.Emailer
 	Auth               []authWithSelectors
 	Authz              []authzWithOptions
-	Tagger             providers.ContextTaggerProvider
+	Tagger             providers.ContextTagger
 	RateLimit          []rateLimitWithSelectors
-	Metrics            providers.MetricsProvider
+	Metrics            providers.Metrics
 	Handlers           []CustomHTTPRoute
 	GrpcHealthCheck    grpc_health_v1.HealthServer
 	Validation         bool
-	PaymentProcessor   providers.PaymentProcessorProvider
+	PaymentProcessor   providers.PaymentProcessor
 }
 
 // ServerOption is a function that configures the server. All ServerOptions are optional.
@@ -123,42 +123,42 @@ func WithGatewayOpts(opts ...runtime.ServeMuxOption) ServerOption {
 }
 
 // WithLogger adds a logging provider
-func WithLogger(provider providers.LoggingProvider) ServerOption {
+func WithLogger(provider providers.Logger) ServerOption {
 	return func(opt *serverOpt) {
 		opt.Logger = provider
 	}
 }
 
 // WithEmail adds an email provider
-func WithEmail(provider providers.EmailProvider) ServerOption {
+func WithEmail(provider providers.Emailer) ServerOption {
 	return func(opt *serverOpt) {
 		opt.Email = provider
 	}
 }
 
 // WithDatabase adds a database provider
-func WithDatabase(provider providers.DatabaseProvider) ServerOption {
+func WithDatabase(provider providers.Database) ServerOption {
 	return func(opt *serverOpt) {
 		opt.Database = provider
 	}
 }
 
 // WithCache adds a cache provider
-func WithCache(provider providers.CacheProvider) ServerOption {
+func WithCache(provider providers.Cache) ServerOption {
 	return func(opt *serverOpt) {
 		opt.Cache = provider
 	}
 }
 
 // WithStream adds a stream provider
-func WithStream(provider providers.StreamProvider) ServerOption {
+func WithStream(provider providers.Stream) ServerOption {
 	return func(opt *serverOpt) {
 		opt.Stream = provider
 	}
 }
 
 // WithContextTagger adds a context tagger to the server
-func WithContextTagger(tagger providers.ContextTaggerProvider) ServerOption {
+func WithContextTagger(tagger providers.ContextTagger) ServerOption {
 	return func(opt *serverOpt) {
 		opt.Tagger = tagger
 	}
@@ -211,7 +211,7 @@ type CustomHTTPRoute struct {
 }
 
 // WithMetrics adds a metrics provider to the server
-func WithMetrics(metrics providers.MetricsProvider) ServerOption {
+func WithMetrics(metrics providers.Metrics) ServerOption {
 	return func(opt *serverOpt) {
 		opt.Metrics = metrics
 		opt.Handlers = append(opt.Handlers, CustomHTTPRoute{
@@ -236,7 +236,7 @@ func WithCustomHTTPRoute(method, path string, handler runtime.HandlerFunc) Serve
 }
 
 // WithPaymentProcessor adds a payment processor to the server
-func WithPaymentProcessor(processor providers.PaymentProcessorProvider) ServerOption {
+func WithPaymentProcessor(processor providers.PaymentProcessor) ServerOption {
 	return func(opt *serverOpt) {
 		opt.PaymentProcessor = processor
 	}
@@ -279,82 +279,41 @@ func NewServer(ctx context.Context, cfg *viper.Viper, opts ...ServerOption) (*Se
 		opt(sopts)
 	}
 	if sopts.Logger == nil {
-		sopts.Logger = slog2.Provider
+		lgger, err := slog2.Provider(ctx, cfg)
+		if err != nil {
+			return nil, utils.WrapError(err, "failed to create logger")
+		}
+		sopts.Logger = lgger
 	}
 	if sopts.Tagger == nil {
-		sopts.Tagger = maptags.Provider
-	}
-	log, err := sopts.Logger(ctx, cfg)
-	if err != nil {
-		return nil, utils.WrapError(err, "failed to create logger")
-	}
-	prviders := providers.All{
-		Logger: log,
-	}
-	if sopts.Email != nil {
-		email, err := sopts.Email(ctx, cfg)
+		tgger, err := maptags.Provider(ctx, cfg)
 		if err != nil {
-			return nil, utils.WrapError(err, "failed to create email provider")
+			return nil, utils.WrapError(err, "failed to create tagger")
 		}
-		prviders.Email = email
+		sopts.Tagger = tgger
 	}
 
-	if sopts.Database != nil {
-		db, err := sopts.Database(ctx, cfg)
-		if err != nil {
-			return nil, utils.WrapError(err, "failed to create database")
-		}
-		// create schema
-		if cfg.GetBool("database.migrate") {
-			if err := db.Migrate(ctx); err != nil {
-				return nil, utils.WrapError(err, "failed to migrate database")
-			}
-		}
-		prviders.Database = db
-	}
-	if sopts.Cache != nil {
-		cahe, err := sopts.Cache(ctx, cfg)
-		if err != nil {
-			return nil, utils.WrapError(err, "failed to create cache")
-		}
-		prviders.Cache = cahe
-	}
-	if sopts.Stream != nil {
-		que, err := sopts.Stream(ctx, cfg)
-		if err != nil {
-			return nil, utils.WrapError(err, "failed to create stream")
-		}
-		prviders.Stream = que
-	}
-	if sopts.PaymentProcessor != nil {
-		processor, err := sopts.PaymentProcessor(ctx, cfg)
-		if err != nil {
-			return nil, utils.WrapError(err, "failed to setup payment processor")
-		}
-		prviders.PaymentProcessor = processor
+	prviders := providers.All{
+		Logger:           sopts.Logger,
+		Email:            sopts.Email,
+		Database:         sopts.Database,
+		Cache:            sopts.Cache,
+		Stream:           sopts.Stream,
+		PaymentProcessor: sopts.PaymentProcessor,
 	}
 
 	{
-		tags, err := sopts.Tagger(ctx, cfg)
-		if err != nil {
-			return nil, utils.WrapError(err, "failed to create context tagger")
-		}
 		// context_tagger interceptor must be first
-		sopts.UnaryInterceptors = append([]grpc.UnaryServerInterceptor{providers.UnaryContextTaggerInterceptor(tags)}, sopts.UnaryInterceptors...)
-		sopts.StreamInterceptors = append([]grpc.StreamServerInterceptor{providers.StreamContextTaggerInterceptor(tags)}, sopts.StreamInterceptors...)
+		sopts.UnaryInterceptors = append([]grpc.UnaryServerInterceptor{providers.UnaryContextTaggerInterceptor(sopts.Tagger)}, sopts.UnaryInterceptors...)
+		sopts.StreamInterceptors = append([]grpc.StreamServerInterceptor{providers.StreamContextTaggerInterceptor(sopts.Tagger)}, sopts.StreamInterceptors...)
 
 		if sopts.Metrics != nil {
-			metrics, err := sopts.Metrics(ctx, cfg)
-			if err != nil {
-				return nil, utils.WrapError(err, "failed to create metrics")
-			}
-			prviders.Metrics = metrics
-			sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, providers.UnaryMetricsInterceptor(metrics))
-			sopts.StreamInterceptors = append(sopts.StreamInterceptors, providers.StreamMetricsInterceptor(metrics))
+			sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, providers.UnaryMetricsInterceptor(sopts.Metrics))
+			sopts.StreamInterceptors = append(sopts.StreamInterceptors, providers.StreamMetricsInterceptor(sopts.Metrics))
 		}
 
-		sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, providers.UnaryLoggingInterceptor(cfg.GetBool("logging.request_body"), log))
-		sopts.StreamInterceptors = append(sopts.StreamInterceptors, providers.StreamLoggingInterceptor(cfg.GetBool("logging.request_body"), log))
+		sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, providers.UnaryLoggingInterceptor(cfg.GetBool("logging.request_body"), sopts.Logger))
+		sopts.StreamInterceptors = append(sopts.StreamInterceptors, providers.StreamLoggingInterceptor(cfg.GetBool("logging.request_body"), sopts.Logger))
 		if len(sopts.RateLimit) > 0 {
 			for _, rl := range sopts.RateLimit {
 				sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, limiter.UnaryServerInterceptor(rl.Limiter, rl.selectors...))

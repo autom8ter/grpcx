@@ -15,30 +15,44 @@ import (
 	"github.com/autom8ter/grpcx"
 	echov1 "github.com/autom8ter/grpcx/gen/echo"
 	"github.com/autom8ter/grpcx/grpcxtest"
-	"github.com/autom8ter/grpcx/providers/maptags"
 	"github.com/autom8ter/grpcx/providers/prometheus"
 	redis2 "github.com/autom8ter/grpcx/providers/redis"
-	slog2 "github.com/autom8ter/grpcx/providers/slog"
 	"github.com/autom8ter/grpcx/providers/sqlite"
 )
 
 func fixtures() []*grpcxtest.Fixture {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	cfg, err := grpcx.LoadConfig("test-api", "", "TEST_API")
 	if err != nil {
 		panic(err)
 	}
 	cfg.Set("database.connection_string", "file::memory:?cache=shared")
+	cache, err := redis2.InMemProvider(ctx, cfg)
+	if err != nil {
+		panic(err)
+	}
+	stream, err := redis2.InMemStreamProvider(ctx, cfg)
+	if err != nil {
+		panic(err)
+	}
+	metrics, err := prometheus.Provider(ctx, cfg)
+	if err != nil {
+		panic(err)
+	}
+	database, err := sqlite.Provider(ctx, cfg)
+	if err != nil {
+		panic(err)
+	}
 	return []*grpcxtest.Fixture{
 		{
 			Config:  cfg,
 			Timeout: 30 * time.Second,
 			ServerOpts: []grpcx.ServerOption{
-				grpcx.WithLogger(slog2.Provider),
-				grpcx.WithContextTagger(maptags.Provider),
-				grpcx.WithCache(redis2.InMemProvider),
-				grpcx.WithDatabase(sqlite.Provider),
-				grpcx.WithStream(redis2.InMemStreamProvider),
-				grpcx.WithMetrics(prometheus.Provider),
+				grpcx.WithCache(cache),
+				grpcx.WithDatabase(database),
+				grpcx.WithStream(stream),
+				grpcx.WithMetrics(metrics),
 			},
 			Services: []grpcx.Service{
 				EchoService(),
@@ -84,23 +98,33 @@ func ExampleNewServer() {
 	if err != nil {
 		panic(err)
 	}
-	cfg.Set("auth.username", "test")
-	cfg.Set("auth.password", "test")
+	cache, err := redis2.InMemProvider(ctx, cfg)
+	if err != nil {
+		panic(err)
+	}
+	stream, err := redis2.InMemStreamProvider(ctx, cfg)
+	if err != nil {
+		panic(err)
+	}
+	metrics, err := prometheus.Provider(ctx, cfg)
+	if err != nil {
+		panic(err)
+	}
+	database, err := sqlite.Provider(ctx, cfg)
+	if err != nil {
+		panic(err)
+	}
 	srv, err := grpcx.NewServer(
 		ctx,
 		cfg,
 		// Register Cache Provider
-		grpcx.WithCache(redis2.InMemProvider),
+		grpcx.WithCache(cache),
 		// Register Stream Provider
-		grpcx.WithStream(redis2.InMemStreamProvider),
-		// Register Context Tagger
-		grpcx.WithContextTagger(maptags.Provider),
-		// Register Logger
-		grpcx.WithLogger(slog2.Provider),
+		grpcx.WithStream(stream),
 		// Register Database
-		grpcx.WithDatabase(sqlite.Provider),
+		grpcx.WithDatabase(database),
 		// Register Metrics
-		grpcx.WithMetrics(prometheus.Provider),
+		grpcx.WithMetrics(metrics),
 	)
 	if err != nil {
 		panic(err)

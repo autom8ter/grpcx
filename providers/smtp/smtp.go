@@ -124,21 +124,21 @@ func (s *SmtpProvider) createSMTPClient(from string) (*smtpClient, error) {
 	}, nil
 }
 
-// Provider is an SMTP email provider
+// Provider is an SMTP email provider(email.password, email.host, email.port)
 func Provider(ctx context.Context, cfg *viper.Viper) (providers.Emailer, error) {
 	s := &SmtpProvider{
-		password: cfg.GetString("email.smtp.password"),
-		smtpHost: cfg.GetString("email.smtp.host"),
-		smtpPort: cfg.GetString("email.smtp.port"),
+		password: cfg.GetString("email.password"),
+		smtpHost: cfg.GetString("email.host"),
+		smtpPort: cfg.GetString("email.port"),
 	}
 	if s.password == "" {
-		return nil, fmt.Errorf("no smtp password found (email.smtp.password)")
+		return nil, fmt.Errorf("no smtp password found (email.password)")
 	}
 	if s.smtpHost == "" {
-		return nil, fmt.Errorf("no smtp host found (email.smtp.host)")
+		return nil, fmt.Errorf("no smtp host found (email.host)")
 	}
 	if s.smtpPort == "" {
-		return nil, fmt.Errorf("no smtp port found (email.smtp.port)")
+		return nil, fmt.Errorf("no smtp port found (email.port)")
 	}
 	s.clients = make(map[string]*smtpClient)
 	return s, nil

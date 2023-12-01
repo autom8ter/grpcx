@@ -88,7 +88,7 @@ func (l *Logger) Debug(ctx context.Context, msg string, tags ...map[string]any) 
 	l.logger.DebugContext(ctx, msg, args...)
 }
 
-// Provider returns a slog logger
+// Provider returns a slog logger(logging.level)
 func Provider(ctx context.Context, cfg *viper.Viper) (providers.Logger, error) {
 	lcfg := &slog.HandlerOptions{
 		AddSource:   false,

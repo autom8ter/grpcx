@@ -290,10 +290,10 @@ func (s *StripePayments) ListCharges(ctx context.Context, customerID string, sta
 }
 
 // Provider is a function that returns a PaymentProcessor implementation
-// requires payment_processing.stripe.secret_key
+// requires payment_processing.secret_key
 func Provider(ctx context.Context, config *viper.Viper) (providers.PaymentProcessor, error) {
 	sc := &client.API{}
-	key := config.GetString("payment_processing.stripe.secret_key")
+	key := config.GetString("payment_processing.secret_key")
 	if key == "" {
 		return nil, fmt.Errorf("no stripe secret key found (payment_processing.stripe.secret_key)")
 	}

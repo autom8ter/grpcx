@@ -41,7 +41,7 @@ func (s mysql) Close() error {
 }
 
 // Provider is a function that returns a Database client
-// The config key "database.connection_string" must be set to the sqlite connection string
+// The config key "database.connection_string" must be set to the mysql connection string
 // If the config key "database.migrations_source" is set, the database will use
 // github.com/golang-migrate/migrate to run migrations from the source set in the config key
 func Provider(ctx context.Context, cfg *viper.Viper) (providers.Database, error) {

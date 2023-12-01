@@ -11,11 +11,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/autom8ter/protoc-gen-authenticate/authenticator"
 	"github.com/autom8ter/protoc-gen-authorize/authorizer"
 	"github.com/autom8ter/protoc-gen-ratelimit/limiter"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/auth"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
+	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/selector"
 	grpc_validator "github.com/grpc-ecosystem/go-grpc-middleware/validator"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/palantir/stacktrace"
@@ -33,6 +34,21 @@ import (
 	slog2 "github.com/autom8ter/grpcx/providers/slog"
 )
 
+type authWithSelectors struct {
+	authenticator.Authenticator
+	selectors []selector.Matcher
+}
+
+type rateLimitWithSelectors struct {
+	limiter.Limiter
+	selectors []selector.Matcher
+}
+
+type authzWithOptions struct {
+	authorizer.Authorizer
+	options []authorizer.Opt
+}
+
 type serverOpt struct {
 	GatewayOpts        []runtime.ServeMuxOption
 	UnaryInterceptors  []grpc.UnaryServerInterceptor
@@ -41,13 +57,14 @@ type serverOpt struct {
 	Database           providers.DatabaseProvider
 	Cache              providers.CacheProvider
 	Stream             providers.StreamProvider
-	Auth               grpc_auth.AuthFunc
-	Authz              []authorizer.Authorizer
+	Auth               []authWithSelectors
+	Authz              []authzWithOptions
 	Tagger             providers.ContextTaggerProvider
-	RateLimit          limiter.Limiter
+	RateLimit          []rateLimitWithSelectors
 	Metrics            providers.MetricsProvider
 	Handlers           []CustomHTTPRoute
 	GrpcHealthCheck    grpc_health_v1.HealthServer
+	Validation         bool
 }
 
 // ServerOption is a function that configures the server. All ServerOptions are optional.
@@ -73,6 +90,13 @@ type ServiceRegistration func(ctx context.Context, cfg ServiceRegistrationConfig
 // Register implements the Service interface
 func (s ServiceRegistration) Register(ctx context.Context, cfg ServiceRegistrationConfig) error {
 	return s(ctx, cfg)
+}
+
+// WithValidation enables grpc validation interceptors for validating requests
+func WithValidation() ServerOption {
+	return func(opt *serverOpt) {
+		opt.Validation = true
+	}
 }
 
 // WithUnaryInterceptors adds unary interceptors to the server
@@ -132,23 +156,38 @@ func WithContextTagger(tagger providers.ContextTaggerProvider) ServerOption {
 }
 
 // WithAuth adds an auth provider to the server (see github.com/autom8ter/protoc-gen-authenticate)
-func WithAuth(auth grpc_auth.AuthFunc) ServerOption {
+// If no selectors are provided, the auth provider will be used for all requests
+// This method can be called multiple times to add multiple auth providers
+func WithAuth(auth authenticator.AuthFunc, selectors ...selector.Matcher) ServerOption {
 	return func(opt *serverOpt) {
-		opt.Auth = auth
+		opt.Auth = append(opt.Auth, authWithSelectors{
+			Authenticator: auth,
+			selectors:     selectors,
+		})
 	}
 }
 
-// WithAuthz adds the authorizers to the server (see github.com/autom8ter/protoc-gen-authorize)
-func WithAuthz(authorizers ...authorizer.Authorizer) ServerOption {
+// WithAuthz adds an authorizer to the server (see github.com/autom8ter/protoc-gen-authorize)
+// This method can be called multiple times to add multiple authorizers
+// Options can be added to add a userExtractor and selectors
+func WithAuthz(authorizer authorizer.Authorizer, opts ...authorizer.Opt) ServerOption {
 	return func(opt *serverOpt) {
-		opt.Authz = authorizers
+		opt.Authz = append(opt.Authz, authzWithOptions{
+			Authorizer: authorizer,
+			options:    opts,
+		})
 	}
 }
 
 // WithRateLimit adds a rate limiter to the server (see protoc-gen-ratelimit)
-func WithRateLimit(rateLimit limiter.Limiter) ServerOption {
+// If no selectors are provided, the rate limiter will be used for all requests
+// This method can be called multiple times to add multiple rate limiters
+func WithRateLimit(rateLimit limiter.Limiter, selectors ...selector.Matcher) ServerOption {
 	return func(opt *serverOpt) {
-		opt.RateLimit = rateLimit
+		opt.RateLimit = append(opt.RateLimit, rateLimitWithSelectors{
+			Limiter:   rateLimit,
+			selectors: selectors,
+		})
 	}
 }
 
@@ -286,21 +325,28 @@ func NewServer(ctx context.Context, cfg *viper.Viper, opts ...ServerOption) (*Se
 
 		sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, providers.UnaryLoggingInterceptor(cfg.GetBool("logging.request_body"), log))
 		sopts.StreamInterceptors = append(sopts.StreamInterceptors, providers.StreamLoggingInterceptor(cfg.GetBool("logging.request_body"), log))
-		if sopts.RateLimit != nil {
-			sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, limiter.UnaryServerInterceptor(sopts.RateLimit))
-			sopts.StreamInterceptors = append(sopts.StreamInterceptors, limiter.StreamServerInterceptor(sopts.RateLimit))
+		if len(sopts.RateLimit) > 0 {
+			for _, rl := range sopts.RateLimit {
+				sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, limiter.UnaryServerInterceptor(rl.Limiter, rl.selectors...))
+				sopts.StreamInterceptors = append(sopts.StreamInterceptors, limiter.StreamServerInterceptor(rl.Limiter, rl.selectors...))
+			}
 		}
-		if sopts.Auth != nil {
-			sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, grpc_auth.UnaryServerInterceptor(sopts.Auth))
-			sopts.StreamInterceptors = append(sopts.StreamInterceptors, grpc_auth.StreamServerInterceptor(sopts.Auth))
+		if len(sopts.Auth) > 0 {
+			for _, ath := range sopts.Auth {
+				sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, authenticator.UnaryServerInterceptor(ath, ath.selectors...))
+				sopts.StreamInterceptors = append(sopts.StreamInterceptors, authenticator.StreamServerInterceptor(ath, ath.selectors...))
+			}
 		}
 		if len(sopts.Authz) > 0 {
-			sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, authorizer.UnaryServerInterceptor(sopts.Authz))
-			sopts.StreamInterceptors = append(sopts.StreamInterceptors, authorizer.StreamServerInterceptor(sopts.Authz))
+			for _, athz := range sopts.Authz {
+				sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, authorizer.UnaryServerInterceptor(athz, athz.options...))
+				sopts.StreamInterceptors = append(sopts.StreamInterceptors, authorizer.StreamServerInterceptor(athz, athz.options...))
+			}
 		}
-
-		sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, grpc_validator.UnaryServerInterceptor())
-		sopts.StreamInterceptors = append(sopts.StreamInterceptors, grpc_validator.StreamServerInterceptor())
+		if sopts.Validation {
+			sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, grpc_validator.UnaryServerInterceptor())
+			sopts.StreamInterceptors = append(sopts.StreamInterceptors, grpc_validator.StreamServerInterceptor())
+		}
 
 		sopts.StreamInterceptors = append(sopts.StreamInterceptors, grpc_recovery.StreamServerInterceptor())
 		sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, grpc_recovery.UnaryServerInterceptor())

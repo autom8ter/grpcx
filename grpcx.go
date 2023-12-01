@@ -57,6 +57,7 @@ type serverOpt struct {
 	Database           providers.DatabaseProvider
 	Cache              providers.CacheProvider
 	Stream             providers.StreamProvider
+	Email              providers.EmailProvider
 	Auth               []authWithSelectors
 	Authz              []authzWithOptions
 	Tagger             providers.ContextTaggerProvider
@@ -65,6 +66,7 @@ type serverOpt struct {
 	Handlers           []CustomHTTPRoute
 	GrpcHealthCheck    grpc_health_v1.HealthServer
 	Validation         bool
+	PaymentProcessor   providers.PaymentProcessorProvider
 }
 
 // ServerOption is a function that configures the server. All ServerOptions are optional.
@@ -124,6 +126,13 @@ func WithGatewayOpts(opts ...runtime.ServeMuxOption) ServerOption {
 func WithLogger(provider providers.LoggingProvider) ServerOption {
 	return func(opt *serverOpt) {
 		opt.Logger = provider
+	}
+}
+
+// WithEmail adds an email provider
+func WithEmail(provider providers.EmailProvider) ServerOption {
+	return func(opt *serverOpt) {
+		opt.Email = provider
 	}
 }
 
@@ -226,6 +235,13 @@ func WithCustomHTTPRoute(method, path string, handler runtime.HandlerFunc) Serve
 	}
 }
 
+// WithPaymentProcessor adds a payment processor to the server
+func WithPaymentProcessor(processor providers.PaymentProcessorProvider) ServerOption {
+	return func(opt *serverOpt) {
+		opt.PaymentProcessor = processor
+	}
+}
+
 // WithGrpcHealthCheck adds a grpc health check to the server
 func WithGrpcHealthCheck(srv grpc_health_v1.HealthServer) ServerOption {
 	return func(opt *serverOpt) {
@@ -275,6 +291,13 @@ func NewServer(ctx context.Context, cfg *viper.Viper, opts ...ServerOption) (*Se
 	prviders := providers.All{
 		Logger: log,
 	}
+	if sopts.Email != nil {
+		email, err := sopts.Email(ctx, cfg)
+		if err != nil {
+			return nil, utils.WrapError(err, "failed to create email provider")
+		}
+		prviders.Email = email
+	}
 
 	if sopts.Database != nil {
 		db, err := sopts.Database(ctx, cfg)
@@ -302,6 +325,13 @@ func NewServer(ctx context.Context, cfg *viper.Viper, opts ...ServerOption) (*Se
 			return nil, utils.WrapError(err, "failed to create stream")
 		}
 		prviders.Stream = que
+	}
+	if sopts.PaymentProcessor != nil {
+		processor, err := sopts.PaymentProcessor(ctx, cfg)
+		if err != nil {
+			return nil, utils.WrapError(err, "failed to setup payment processor")
+		}
+		prviders.PaymentProcessor = processor
 	}
 
 	{

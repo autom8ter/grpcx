@@ -116,13 +116,13 @@ func (r Redis) AsyncSubscribe(ctx context.Context, topic, consumer string, handl
 			if !gotLock {
 				continue
 			}
-			go func() {
+			go func(msg map[string]any) {
 				handlerCtx, handlerCancel := context.WithCancel(ctx)
 				defer handlerCancel()
 				if !handler(handlerCtx, message) {
 					cancel()
 				}
-			}()
+			}(message)
 		}
 	}
 }

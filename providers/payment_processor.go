@@ -3,8 +3,6 @@ package providers
 import (
 	"context"
 	"time"
-
-	"github.com/spf13/viper"
 )
 
 // Charge is a struct for charging a customer
@@ -69,6 +67,3 @@ type PaymentProcessor interface {
 	// ListCharges lists charges
 	ListCharges(ctx context.Context, customerID, after string, limit int64) ([]*Charge, error)
 }
-
-// PaymentProcessorProvider is a function that returns a PaymentProcessor implementation
-type PaymentProcessorProvider func(ctx context.Context, config *viper.Viper) (PaymentProcessor, error)

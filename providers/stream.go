@@ -4,8 +4,6 @@ package providers
 
 import (
 	"context"
-
-	"github.com/spf13/viper"
 )
 
 // MessageHandler is a function that handles a message from a stream
@@ -20,6 +18,3 @@ type Stream interface {
 	// AsyncSubscribe subscribes to a topic and handles messages asynchronously
 	AsyncSubscribe(ctx context.Context, topic string, consumer string, handler MessageHandler) error
 }
-
-// StreamProvider is a function that returns a Stream
-type StreamProvider func(ctx context.Context, cfg *viper.Viper) (Stream, error)

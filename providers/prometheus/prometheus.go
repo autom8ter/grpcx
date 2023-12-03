@@ -1,16 +1,13 @@
 package prometheus
 
 import (
-	"context"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/spf13/viper"
-
-	"github.com/autom8ter/grpcx/providers"
 )
 
+// Metrics is a prometheus metrics provider
 type Metrics struct {
 	mu         sync.RWMutex
 	gauges     map[string]*prometheus.GaugeVec
@@ -29,6 +26,7 @@ func (m *Metrics) RegisterGauge(name string, labels ...string) {
 	}, labels)
 }
 
+// RegisterHistogram registers a new histogram with the given name and labels
 func (m *Metrics) RegisterHistogram(name string, labels ...string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -40,6 +38,7 @@ func (m *Metrics) RegisterHistogram(name string, labels ...string) {
 	}, labels)
 }
 
+// Inc increments the gauge by 1
 func (m *Metrics) Inc(name string, labels ...string) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -47,6 +46,7 @@ func (m *Metrics) Inc(name string, labels ...string) {
 	gauge.WithLabelValues(labels...).Inc()
 }
 
+// Dec decrements the gauge by 1
 func (m *Metrics) Dec(name string, labels ...string) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -54,6 +54,7 @@ func (m *Metrics) Dec(name string, labels ...string) {
 	gauge.WithLabelValues(labels...).Dec()
 }
 
+// Observe adds a new observation to the histogram
 func (m *Metrics) Observe(name string, value float64, labels ...string) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -61,6 +62,7 @@ func (m *Metrics) Observe(name string, value float64, labels ...string) {
 	hist.WithLabelValues(labels...).Observe(value)
 }
 
+// Set sets the gauge to the given value
 func (m *Metrics) Set(name string, value float64, labels ...string) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -68,13 +70,10 @@ func (m *Metrics) Set(name string, value float64, labels ...string) {
 	gauge.WithLabelValues(labels...).Set(value)
 }
 
+// New returns a new Metrics instance
 func New() *Metrics {
 	return &Metrics{
 		gauges:     make(map[string]*prometheus.GaugeVec),
 		histograms: make(map[string]*prometheus.HistogramVec),
 	}
-}
-
-func Provider(ctx context.Context, cfg *viper.Viper) (providers.Metrics, error) {
-	return New(), nil
 }

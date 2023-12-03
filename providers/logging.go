@@ -5,7 +5,6 @@ package providers
 import (
 	"context"
 
-	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -23,11 +22,8 @@ type Logger interface {
 	Debug(ctx context.Context, msg string, tags ...map[string]any)
 }
 
-// LoggingProvider is a function that returns a Logger
-type LoggingProvider func(ctx context.Context, cfg *viper.Viper) (Logger, error)
-
 // UnaryLoggingInterceptor adds a unary logging interceptor to the server
-func UnaryLoggingInterceptor(requestBody bool, logger Logger) grpc.UnaryServerInterceptor {
+func UnaryLoggingInterceptor(logger Logger) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		tags, ok := GetTags(ctx)
 		if !ok {
@@ -44,7 +40,7 @@ func UnaryLoggingInterceptor(requestBody bool, logger Logger) grpc.UnaryServerIn
 }
 
 // StreamLoggingInterceptor adds a stream logging interceptor to the server
-func StreamLoggingInterceptor(requestBody bool, logger Logger) grpc.StreamServerInterceptor {
+func StreamLoggingInterceptor(logger Logger) grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		tags, ok := GetTags(ss.Context())
 		if !ok {

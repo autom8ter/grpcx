@@ -2,8 +2,6 @@ package providers
 
 import (
 	"context"
-
-	"github.com/spf13/viper"
 )
 
 // Email is a struct for sending emails
@@ -15,9 +13,8 @@ type Email struct {
 	ContentType string   `json:"content_type"`
 }
 
+// Emailer is an interface that represents an email client
 type Emailer interface {
+	// SendEmail sends an email
 	SendEmail(ctx context.Context, email *Email) error
 }
-
-// EmailProvider is a function that returns an Emailer implementation
-type EmailProvider func(ctx context.Context, config *viper.Viper) (Emailer, error)

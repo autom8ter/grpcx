@@ -4,9 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"os"
-	"strings"
-
-	"github.com/spf13/viper"
 
 	"github.com/autom8ter/grpcx/providers"
 )
@@ -86,24 +83,4 @@ func (l *Logger) Debug(ctx context.Context, msg string, tags ...map[string]any) 
 		}
 	}
 	l.logger.DebugContext(ctx, msg, args...)
-}
-
-// Provider returns a slog logger(logging.level)
-func Provider(ctx context.Context, cfg *viper.Viper) (providers.Logger, error) {
-	lcfg := &slog.HandlerOptions{
-		AddSource:   false,
-		Level:       slog.LevelInfo,
-		ReplaceAttr: nil,
-	}
-	switch strings.ToLower(cfg.GetString("logging.level")) {
-	case "info":
-		lcfg.Level = slog.LevelInfo
-	case "warn":
-		lcfg.Level = slog.LevelWarn
-	case "error":
-		lcfg.Level = slog.LevelError
-	default:
-		lcfg.Level = slog.LevelDebug
-	}
-	return NewJSONLogger(lcfg), nil
 }

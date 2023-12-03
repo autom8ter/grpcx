@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
-	"github.com/spf13/viper"
 
 	"github.com/autom8ter/grpcx/internal/utils"
 	"github.com/autom8ter/grpcx/providers"
@@ -80,15 +79,4 @@ func (n *Nats) AsyncSubscribe(ctx context.Context, topic, consumer string, handl
 			}
 		}(msg)
 	}
-}
-
-// Provider returns a new nats stream provider
-func Provider(ctx context.Context, config *viper.Viper) (providers.Stream, error) {
-	conn, err := nats.Connect(config.GetString("stream.nats.url"))
-	if err != nil {
-		return nil, utils.WrapError(err, "failed to connect to nats")
-	}
-	return &Nats{
-		client: conn,
-	}, nil
 }

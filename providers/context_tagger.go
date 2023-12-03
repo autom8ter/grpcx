@@ -6,7 +6,6 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
@@ -57,27 +56,13 @@ func WithTags(ctx context.Context, tags Tags) context.Context {
 	return context.WithValue(ctx, tagsKey, tags)
 }
 
-// ContextTagger is an interface for tagging contexts
-type ContextTagger interface {
-	// TagContext tags the context with the given contextID and grpcMethod
-	TagContext(ctx context.Context) Tags
-}
-
-// ContextTaggerFunc is a function that implements the ContextTagger interface
-type ContextTaggerFunc func(ctx context.Context) Tags
-
-// TagContext tags the context with the given contextID and grpcMethod
-func (c ContextTaggerFunc) TagContext(ctx context.Context) Tags {
-	return c(ctx)
-}
-
-// ContextTaggerProvider is a function that returns a ContextTagger
-type ContextTaggerProvider func(ctx context.Context, cfg *viper.Viper) (ContextTagger, error)
+// TagsProvider is a function that returns a new Tags instance
+type TagsProvider func() Tags
 
 // UnaryContextTaggerInterceptor is a grpc unary interceptor that tags the inbound context
-func UnaryContextTaggerInterceptor(tagger ContextTagger) func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+func UnaryContextTaggerInterceptor(tagger TagsProvider) func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-		tags := tagger.TagContext(ctx)
+		tags := tagger()
 		var (
 			method    = info.FullMethod
 			contextID string
@@ -100,9 +85,9 @@ func UnaryContextTaggerInterceptor(tagger ContextTagger) func(ctx context.Contex
 }
 
 // StreamContextTaggerInterceptor is a grpc stream interceptor that tags the inbound context
-func StreamContextTaggerInterceptor(tagger ContextTagger) func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func StreamContextTaggerInterceptor(tagger TagsProvider) func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		tags := tagger.TagContext(ss.Context())
+		tags := tagger()
 		var (
 			method    = info.FullMethod
 			contextID string

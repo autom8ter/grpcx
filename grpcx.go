@@ -3,6 +3,7 @@ package grpcx
 import (
 	"context"
 	"fmt"
+	`log/slog`
 	"net"
 	"net/http"
 	"os"
@@ -60,7 +61,7 @@ type serverOpt struct {
 	Email              providers.Emailer
 	Auth               []authWithSelectors
 	Authz              []authzWithOptions
-	Tagger             providers.ContextTagger
+	Tagger             providers.TagsProvider
 	RateLimit          []rateLimitWithSelectors
 	Metrics            providers.Metrics
 	Handlers           []CustomHTTPRoute
@@ -68,6 +69,7 @@ type serverOpt struct {
 	Validation         bool
 	PaymentProcessor   providers.PaymentProcessor
 	Storage            providers.Storage
+	Cors               *cors.Options
 }
 
 // ServerOption is a function that configures the server. All ServerOptions are optional.
@@ -165,8 +167,8 @@ func WithStream(provider providers.Stream) ServerOption {
 	}
 }
 
-// WithContextTagger adds a context tagger to the server
-func WithContextTagger(tagger providers.ContextTagger) ServerOption {
+// WithTagsProvider adds a context tagger to the server
+func WithTagsProvider(tagger providers.TagsProvider) ServerOption {
 	return func(opt *serverOpt) {
 		opt.Tagger = tagger
 	}
@@ -205,6 +207,13 @@ func WithRateLimit(rateLimit limiter.Limiter, selectors ...selector.Matcher) Ser
 			Limiter:   rateLimit,
 			selectors: selectors,
 		})
+	}
+}
+
+// WithCors adds cors middleware to the rest-gateway
+func WithCors(opts *cors.Options) ServerOption {
+	return func(opt *serverOpt) {
+		opt.Cors = opts
 	}
 }
 
@@ -275,31 +284,26 @@ type Server struct {
 	grpcOpts    []grpc.ServerOption
 	gatewayOpts []runtime.ServeMuxOption
 	httpRoutes  []CustomHTTPRoute
+	cors        *cors.Options
 }
 
 // NewServer creates a new server with the given config and options
-func NewServer(ctx context.Context, cfg *viper.Viper, opts ...ServerOption) (*Server, error) {
-	s := &Server{
-		cfg: cfg,
-	}
+func NewServer(ctx context.Context, opts ...ServerOption) (*Server, error) {
+	s := &Server{}
 	var sopts = &serverOpt{}
 	for _, opt := range opts {
 		opt(sopts)
 	}
 	if sopts.Logger == nil {
-		lgger, err := slog2.Provider(ctx, cfg)
-		if err != nil {
-			return nil, utils.WrapError(err, "failed to create logger")
-		}
+		lgger := slog2.NewJSONLogger(&slog.HandlerOptions{
+			AddSource: false,
+			Level:     slog.LevelDebug,
+		})
 		sopts.Logger = lgger
-		sopts.Logger.Debug(ctx, "registered default logger")
+		sopts.Logger.Debug(ctx, "registered default logger(slog)")
 	}
 	if sopts.Tagger == nil {
-		tgger, err := maptags.Provider(ctx, cfg)
-		if err != nil {
-			return nil, utils.WrapError(err, "failed to create tagger")
-		}
-		sopts.Tagger = tgger
+		sopts.Tagger = maptags.NewTagsProvider([]string{`method`, `context_id`, `error`})
 		sopts.Logger.Debug(ctx, "registered default context tagger")
 	}
 
@@ -324,8 +328,8 @@ func NewServer(ctx context.Context, cfg *viper.Viper, opts ...ServerOption) (*Se
 			sopts.Logger.Debug(ctx, "registered metrics provider")
 		}
 
-		sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, providers.UnaryLoggingInterceptor(cfg.GetBool("logging.request_body"), sopts.Logger))
-		sopts.StreamInterceptors = append(sopts.StreamInterceptors, providers.StreamLoggingInterceptor(cfg.GetBool("logging.request_body"), sopts.Logger))
+		sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, providers.UnaryLoggingInterceptor(sopts.Logger))
+		sopts.StreamInterceptors = append(sopts.StreamInterceptors, providers.StreamLoggingInterceptor(sopts.Logger))
 		if len(sopts.RateLimit) > 0 {
 			for _, rl := range sopts.RateLimit {
 				sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, limiter.UnaryServerInterceptor(rl.Limiter, rl.selectors...))
@@ -368,6 +372,7 @@ func NewServer(ctx context.Context, cfg *viper.Viper, opts ...ServerOption) (*Se
 	s.providers = prviders
 	s.httpRoutes = sopts.Handlers
 	s.health = sopts.GrpcHealthCheck
+	s.cors = sopts.Cors
 	return s, nil
 }
 
@@ -376,17 +381,12 @@ func (s *Server) Providers() providers.All {
 	return s.providers
 }
 
-// Config returns the server config
-func (s *Server) Config() *viper.Viper {
-	return s.cfg
-}
-
 // Serve registers the given services and starts the server. This function blocks until the server is shutdown.
 // The server will shutdown when the context is canceled or an interrupt signal is received.
 // The server will start grpc/rest-gateway servers on the port specified by the config key "api.port"
 // The server will register a health check at /health and a readiness check at /ready
 // The server will register a metrics endpoint at /metrics if the config key "metrics.prometheus" is true
-func (s *Server) Serve(ctx context.Context, services ...Service) error {
+func (s *Server) Serve(ctx context.Context, port int, services ...Service) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -418,16 +418,14 @@ func (s *Server) Serve(ctx context.Context, services ...Service) error {
 		grpc_health_v1.RegisterHealthServer(srv, s.health)
 		s.providers.Logger.Debug(ctx, "registered grpc health check")
 	}
-	if s.cfg.GetBool("database.migrate") {
-		s.providers.Logger.Debug(ctx, "performing database migration...")
-		if err := s.providers.Database.Migrate(ctx); err != nil {
-			return utils.WrapError(err, "failed to migrate database")
-		}
-		s.providers.Logger.Debug(ctx, "performed database migration")
-	}
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%v", s.cfg.GetInt("api.port")))
+	//s.providers.Logger.Debug(ctx, "performing database migration...")
+	//if err := s.providers.Database.Migrate(ctx); err != nil {
+	//	return utils.WrapError(err, "failed to migrate database")
+	//}
+	//s.providers.Logger.Debug(ctx, "performed database migration")
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%v", port))
 	if err != nil {
-		return utils.WrapError(err, "failed to listen on port %v", s.cfg.GetInt("api.port"))
+		return utils.WrapError(err, "failed to listen on port %v", port)
 	}
 	defer lis.Close()
 
@@ -436,20 +434,13 @@ func (s *Server) Serve(ctx context.Context, services ...Service) error {
 	grpcMatcher := m.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
 	restMatcher := m.Match(cmux.HTTP1Fast())
 	var mux http.Handler
-	if s.cfg.GetBool("api.cors.enabled") {
-		mux = cors.New(cors.Options{
-			AllowedOrigins:   s.cfg.GetStringSlice("api.cors.allowed_origins"),
-			AllowedMethods:   s.cfg.GetStringSlice("api.cors.allowed_methods"),
-			AllowedHeaders:   s.cfg.GetStringSlice("api.cors.allowed_headers"),
-			ExposedHeaders:   s.cfg.GetStringSlice("api.cors.exposed_headers"),
-			AllowCredentials: s.cfg.GetBool("api.cors.allow_credentials"),
-		}).Handler(gwMux)
+	if s.cors != nil {
+		mux = cors.New(*s.cors).Handler(gwMux)
 		s.providers.Logger.Debug(ctx, "registered cors middleware")
 	} else {
 		mux = gwMux
 	}
 	server := &http.Server{Handler: mux}
-	port := s.cfg.GetInt("api.port")
 	egp, ctx := errgroup.WithContext(ctx)
 	go func() {
 		ch := make(chan os.Signal, 1)

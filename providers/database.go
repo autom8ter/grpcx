@@ -4,8 +4,6 @@ package providers
 
 import (
 	"context"
-
-	"github.com/spf13/viper"
 )
 
 // Database is an interface that represents a database client. It is used to run migrations and close the connection.
@@ -16,6 +14,3 @@ type Database interface {
 	// Close closes the database connection
 	Close() error
 }
-
-// DatabaseProvider is a function that returns a Database
-type DatabaseProvider func(ctx context.Context, config *viper.Viper) (Database, error)

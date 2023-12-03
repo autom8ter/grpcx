@@ -8,8 +8,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/spf13/viper"
-
 	"github.com/autom8ter/grpcx/providers"
 )
 
@@ -17,9 +15,29 @@ import (
 type SmtpProvider struct {
 	password string
 	smtpHost string
-	smtpPort string
+	smtpPort int
 	clients  map[string]*smtpClient
 	mu       sync.RWMutex
+}
+
+// New returns a new smtp email provider
+func New(password string, host string, port int) (providers.Emailer, error) {
+	s := &SmtpProvider{
+		password: password,
+		smtpHost: host,
+		smtpPort: port,
+	}
+	if s.password == "" {
+		return nil, fmt.Errorf("no smtp password found")
+	}
+	if s.smtpHost == "" {
+		return nil, fmt.Errorf("no smtp host found")
+	}
+	if s.smtpPort == 0 {
+		return nil, fmt.Errorf("no smtp port found")
+	}
+	s.clients = make(map[string]*smtpClient)
+	return s, nil
 }
 
 type smtpClient struct {
@@ -98,7 +116,7 @@ func (s *SmtpProvider) createSMTPClient(from string) (*smtpClient, error) {
 	}
 
 	// Connect to the SMTP Server
-	conn, err := tls.Dial("tcp", s.smtpHost+":"+s.smtpPort, tlsConfig)
+	conn, err := tls.Dial("tcp", fmt.Sprintf("%s:%d", s.smtpHost, s.smtpPort), tlsConfig)
 	if err != nil {
 		return nil, fmt.Errorf("TLS dial failed: %v", err)
 	}
@@ -122,24 +140,4 @@ func (s *SmtpProvider) createSMTPClient(from string) (*smtpClient, error) {
 		conn:   conn,
 		mu:     sync.Mutex{},
 	}, nil
-}
-
-// Provider is an SMTP email provider(email.password, email.host, email.port)
-func Provider(ctx context.Context, cfg *viper.Viper) (providers.Emailer, error) {
-	s := &SmtpProvider{
-		password: cfg.GetString("email.password"),
-		smtpHost: cfg.GetString("email.host"),
-		smtpPort: cfg.GetString("email.port"),
-	}
-	if s.password == "" {
-		return nil, fmt.Errorf("no smtp password found (email.password)")
-	}
-	if s.smtpHost == "" {
-		return nil, fmt.Errorf("no smtp host found (email.host)")
-	}
-	if s.smtpPort == "" {
-		return nil, fmt.Errorf("no smtp port found (email.port)")
-	}
-	s.clients = make(map[string]*smtpClient)
-	return s, nil
 }

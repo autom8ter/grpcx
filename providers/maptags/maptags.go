@@ -1,10 +1,8 @@
 package maptags
 
 import (
-	"context"
 	"sync"
 
-	"github.com/spf13/viper"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/autom8ter/grpcx/providers"
@@ -66,13 +64,6 @@ func (m *MapTags) WithError(err error) providers.Tags {
 	return m
 }
 
-// Provider returns a ContextTagger that tags contexts with the given data and logTags
-func Provider(ctx context.Context, cfg *viper.Viper) (providers.ContextTagger, error) {
-	return providers.ContextTaggerFunc(func(ctx context.Context) providers.Tags {
-		return New(map[string]interface{}{}, cfg.GetStringSlice("logging.tags"))
-	}), nil
-}
-
 func (m *MapTags) GetMetadata() (metadata.MD, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -113,4 +104,15 @@ func (m *MapTags) Set(key string, value any) providers.Tags {
 	defer m.mu.Unlock()
 	m.data[key] = value
 	return m
+}
+
+// NewTagsProvider returns a new TagsProvider that returns a new Tags instance
+func NewTagsProvider(logTags []string) providers.TagsProvider {
+	return func() providers.Tags {
+		return &MapTags{
+			data:    make(map[string]interface{}),
+			logTags: logTags,
+			mu:      sync.RWMutex{},
+		}
+	}
 }

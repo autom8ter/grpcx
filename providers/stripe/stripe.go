@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/spf13/viper"
 	"github.com/stripe/stripe-go/v76"
 	"github.com/stripe/stripe-go/v76/client"
 	"github.com/stripe/stripe-go/v76/customer"
@@ -17,6 +16,11 @@ import (
 
 type StripePayments struct {
 	client *client.API
+}
+
+// NewStripePayments returns a new StripePayments
+func NewStripePayments(client *client.API) *StripePayments {
+	return &StripePayments{client: client}
 }
 
 // CreateCustomer creates a customer
@@ -287,16 +291,4 @@ func (s *StripePayments) ListCharges(ctx context.Context, customerID string, sta
 		})
 	}
 	return charges, nil
-}
-
-// Provider is a function that returns a PaymentProcessor implementation
-// requires payment_processing.secret_key
-func Provider(ctx context.Context, config *viper.Viper) (providers.PaymentProcessor, error) {
-	sc := &client.API{}
-	key := config.GetString("payment_processing.secret_key")
-	if key == "" {
-		return nil, fmt.Errorf("no stripe secret key found (payment_processing.stripe.secret_key)")
-	}
-	sc.Init(key, nil)
-	return &StripePayments{client: sc}, nil
 }

@@ -5,8 +5,6 @@ package providers
 import (
 	"context"
 	"time"
-
-	"github.com/spf13/viper"
 )
 
 // Cache is an interface for caching data
@@ -24,6 +22,3 @@ type Cache interface {
 	// Once runs a function once for a given key. It returns true if the function was run, false otherwise.
 	Once(ctx context.Context, key string, ttl time.Duration, fn func(ctx context.Context) error) (bool, error)
 }
-
-// CacheProvider is a function that returns a Cache
-type CacheProvider func(ctx context.Context, config *viper.Viper) (Cache, error)

@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -25,7 +24,6 @@ type TestFunc func(t *testing.T, ctx context.Context, client grpc.ClientConnInte
 
 // Fixture is a test fixture that runs a test against a grpc client connection pointed at the test server
 type Fixture struct {
-	Config     *viper.Viper
 	Timeout    time.Duration
 	ServerOpts []grpcx.ServerOption
 	Services   []grpcx.Service
@@ -44,26 +42,19 @@ func (f *Fixture) RunTest(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), f.Timeout)
 	defer cancel()
-	if f.Config == nil {
-		cfg, err := grpcx.LoadConfig("test-api", "", "TEST_API")
-		require.NoError(t, err)
-		f.Config = cfg
-	}
-	f.Config.Set("api.port", randInt(49152, 65535))
-	grpcPort := f.Config.GetInt("api.port")
+	grpcPort := randInt(49152, 65535)
 	go func() {
 		t.Run("server", func(t *testing.T) {
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
 			srv, err := grpcx.NewServer(
 				ctx,
-				f.Config,
 				f.ServerOpts...,
 			)
 			if err != nil {
 				panic(err)
 			}
-			if err := srv.Serve(ctx, f.Services...); err != nil {
+			if err := srv.Serve(ctx, grpcPort, f.Services...); err != nil {
 				srv.Providers().Logger.Error(ctx, "server failure", map[string]any{
 					"error": err.Error(),
 				})

@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -25,9 +24,6 @@ type Metrics interface {
 	// RegisterGauge registers a new gauge with the given name and labels
 	RegisterGauge(name string, labels ...string)
 }
-
-// MetricsProvider is a function that returns a Metrics
-type MetricsProvider func(ctx context.Context, cfg *viper.Viper) (Metrics, error)
 
 // UnaryMetricsInterceptor returns a grpc unary server interceptor that collects metrics
 func UnaryMetricsInterceptor(metrics Metrics) grpc.UnaryServerInterceptor {

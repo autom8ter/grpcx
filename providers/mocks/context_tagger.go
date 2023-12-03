@@ -36,9 +36,9 @@ func (m *MockContextTagger) EXPECT() *MockContextTaggerMockRecorder {
 }
 
 // TagContext mocks base method.
-func (m *MockContextTagger) TagContext(arg0 context.Context) providers.Tags {
+func (m *MockContextTagger) NewTags(arg0 context.Context) providers.Tags {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "TagContext", arg0)
+	ret := m.ctrl.Call(m, "NewTags", arg0)
 	ret0, _ := ret[0].(providers.Tags)
 	return ret0
 }
@@ -46,5 +46,5 @@ func (m *MockContextTagger) TagContext(arg0 context.Context) providers.Tags {
 // TagContext indicates an expected call of TagContext.
 func (mr *MockContextTaggerMockRecorder) TagContext(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TagContext", reflect.TypeOf((*MockContextTagger)(nil).TagContext), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewTags", reflect.TypeOf((*MockContextTagger)(nil).NewTags), arg0)
 }

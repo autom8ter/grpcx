@@ -23,35 +23,22 @@ import (
 func fixtures() []*grpcxtest.Fixture {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cfg, err := grpcx.LoadConfig("test-api", "", "TEST_API")
+	cache, err := redis2.NewInMem()
 	if err != nil {
 		panic(err)
 	}
-	cfg.Set("database.connection_string", "file::memory:?cache=shared")
-	cache, err := redis2.InMemProvider(ctx, cfg)
-	if err != nil {
-		panic(err)
-	}
-	stream, err := redis2.InMemStreamProvider(ctx, cfg)
-	if err != nil {
-		panic(err)
-	}
-	metrics, err := prometheus.Provider(ctx, cfg)
-	if err != nil {
-		panic(err)
-	}
-	database, err := sqlite.Provider(ctx, cfg)
+	metrics := prometheus.New()
+	database, err := sqlite.New(ctx, "file::memory:?cache=shared", "")
 	if err != nil {
 		panic(err)
 	}
 	return []*grpcxtest.Fixture{
 		{
-			Config:  cfg,
 			Timeout: 30 * time.Second,
 			ServerOpts: []grpcx.ServerOption{
 				grpcx.WithCache(cache),
 				grpcx.WithDatabase(database),
-				grpcx.WithStream(stream),
+				grpcx.WithStream(cache),
 				grpcx.WithMetrics(metrics),
 			},
 			Services: []grpcx.Service{
@@ -64,7 +51,6 @@ func fixtures() []*grpcxtest.Fixture {
 			ClientMeta: map[string]string{},
 		},
 		{
-			Config:     cfg,
 			Timeout:    30 * time.Second,
 			ServerOpts: nil,
 			Services:   []grpcx.Service{EchoService()},
@@ -94,33 +80,25 @@ func Test(t *testing.T) {
 func ExampleNewServer() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cfg, err := grpcx.LoadConfig("test-api", "", "TEST_API")
+	cache, err := redis2.NewInMem()
 	if err != nil {
 		panic(err)
 	}
-	cache, err := redis2.InMemProvider(ctx, cfg)
+	metrics := prometheus.New()
+	database, err := sqlite.New(ctx, "file::memory:?cache=shared", "")
 	if err != nil {
 		panic(err)
 	}
-	stream, err := redis2.InMemStreamProvider(ctx, cfg)
-	if err != nil {
-		panic(err)
-	}
-	metrics, err := prometheus.Provider(ctx, cfg)
-	if err != nil {
-		panic(err)
-	}
-	database, err := sqlite.Provider(ctx, cfg)
+	port := 8080
 	if err != nil {
 		panic(err)
 	}
 	srv, err := grpcx.NewServer(
 		ctx,
-		cfg,
 		// Register Cache Provider
 		grpcx.WithCache(cache),
 		// Register Stream Provider
-		grpcx.WithStream(stream),
+		grpcx.WithStream(cache),
 		// Register Database
 		grpcx.WithDatabase(database),
 		// Register Metrics
@@ -130,12 +108,12 @@ func ExampleNewServer() {
 		panic(err)
 	}
 	go func() {
-		if err := srv.Serve(ctx, EchoService()); err != nil {
+		if err := srv.Serve(ctx, port, EchoService()); err != nil {
 			panic(err)
 		}
 	}()
 
-	conn, err := grpc.DialContext(ctx, fmt.Sprintf("localhost:%v", cfg.GetInt("api.port")), grpc.WithInsecure())
+	conn, err := grpc.DialContext(ctx, fmt.Sprintf("localhost:%v", port), grpc.WithInsecure())
 	if err != nil {
 		panic(err)
 	}

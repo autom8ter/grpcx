@@ -10,11 +10,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/cast"
-	"github.com/spf13/viper"
 
 	"github.com/autom8ter/grpcx/providers"
 )
 
+// Redis is a struct for a redis cache/stream provider
 type Redis struct {
 	client *redis.Client
 }
@@ -22,6 +22,18 @@ type Redis struct {
 // NewRedis returns a new redis cache/stream provider
 func NewRedis(client *redis.Client) *Redis {
 	return &Redis{client: client}
+}
+
+// NewInMem returns a new in-memory redis provider(used for testing)
+func NewInMem() (*Redis, error) {
+	mr, err := miniredis.Run()
+	if err != nil {
+		return nil, err
+	}
+	client := redis.NewClient(&redis.Options{
+		Addr: mr.Addr(),
+	})
+	return NewRedis(client), nil
 }
 
 // Get gets a key
@@ -135,72 +147,4 @@ func (r Redis) AsyncSubscribe(ctx context.Context, topic, consumer string, handl
 			}(message)
 		}
 	}
-}
-
-// Provider returns a new Redis cache provider(cache.addr, cache.password, cache.db)
-func Provider(ctx context.Context, config *viper.Viper) (providers.Cache, error) {
-	if config.GetString("cache.addr") == "" {
-		return nil, fmt.Errorf("no redis addr found (cache.addr)")
-	}
-	client := redis.NewClient(&redis.Options{
-		Addr:     config.GetString("cache.addr"),
-		Password: config.GetString("cache.password"),
-		DB:       config.GetInt("cache.db"),
-	})
-	return NewRedis(client), nil
-}
-
-// StreamProvider returns a new Redis stream provider(stream.addr, stream.password, stream.db)
-func StreamProvider(ctx context.Context, config *viper.Viper) (providers.Stream, error) {
-	var (
-		addr     = config.GetString("stream.addr")
-		password = config.GetString("stream.password")
-		db       = config.GetInt("stream.db")
-	)
-	if addr == "" {
-		addr = config.GetString("cache.addr")
-	}
-	if password == "" {
-		password = config.GetString("cache.password")
-	}
-	if db == 0 {
-		db = config.GetInt("cache.db")
-	}
-	if addr == "" {
-		return nil, fmt.Errorf("configuration missing for redis stream provider(stream.addr, stream.password, stream.db)")
-	}
-	client := redis.NewClient(&redis.Options{
-		Addr:     addr,
-		Password: password,
-		DB:       db,
-	})
-	return NewRedis(client), nil
-}
-
-// InMemProvider returns a new in-memory redis provider(used for testing)
-func InMemProvider(ctx context.Context, config *viper.Viper) (providers.Cache, error) {
-	mr, err := miniredis.Run()
-	if err != nil {
-		return nil, err
-	}
-	client := redis.NewClient(&redis.Options{
-		Addr:     mr.Addr(),
-		Password: config.GetString("cache.password"),
-		DB:       config.GetInt("cache.db"),
-	})
-	return NewRedis(client), nil
-}
-
-// InMemProvider returns a new in-memory redis stream provider(used for testing)
-func InMemStreamProvider(ctx context.Context, config *viper.Viper) (providers.Stream, error) {
-	mr, err := miniredis.Run()
-	if err != nil {
-		return nil, err
-	}
-	client := redis.NewClient(&redis.Options{
-		Addr:     mr.Addr(),
-		Password: config.GetString("cache.password"),
-		DB:       config.GetInt("cache.db"),
-	})
-	return NewRedis(client), nil
 }

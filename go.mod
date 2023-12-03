@@ -3,10 +3,12 @@ module github.com/autom8ter/grpcx
 go 1.21.4
 
 require (
+	cloud.google.com/go/storage v1.35.1
 	github.com/alicebob/miniredis/v2 v2.31.0
 	github.com/autom8ter/protoc-gen-authenticate v0.2.0
 	github.com/autom8ter/protoc-gen-authorize v0.9.0
 	github.com/autom8ter/protoc-gen-ratelimit v0.0.2
+	github.com/aws/aws-sdk-go v1.48.11
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/golang-migrate/migrate/v4 v4.16.2
 	github.com/google/uuid v1.4.0
@@ -35,9 +37,7 @@ require (
 	cloud.google.com/go/compute v1.23.3 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v1.1.5 // indirect
-	cloud.google.com/go/storage v1.35.1 // indirect
 	github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a // indirect
-	github.com/aws/aws-sdk-go v1.48.11 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect

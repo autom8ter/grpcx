@@ -292,6 +292,7 @@ func NewServer(ctx context.Context, cfg *viper.Viper, opts ...ServerOption) (*Se
 			return nil, utils.WrapError(err, "failed to create logger")
 		}
 		sopts.Logger = lgger
+		sopts.Logger.Debug(ctx, "registered default logger")
 	}
 	if sopts.Tagger == nil {
 		tgger, err := maptags.Provider(ctx, cfg)
@@ -299,6 +300,7 @@ func NewServer(ctx context.Context, cfg *viper.Viper, opts ...ServerOption) (*Se
 			return nil, utils.WrapError(err, "failed to create tagger")
 		}
 		sopts.Tagger = tgger
+		sopts.Logger.Debug(ctx, "registered default context tagger")
 	}
 
 	prviders := providers.All{
@@ -319,6 +321,7 @@ func NewServer(ctx context.Context, cfg *viper.Viper, opts ...ServerOption) (*Se
 		if sopts.Metrics != nil {
 			sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, providers.UnaryMetricsInterceptor(sopts.Metrics))
 			sopts.StreamInterceptors = append(sopts.StreamInterceptors, providers.StreamMetricsInterceptor(sopts.Metrics))
+			sopts.Logger.Debug(ctx, "registered metrics provider")
 		}
 
 		sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, providers.UnaryLoggingInterceptor(cfg.GetBool("logging.request_body"), sopts.Logger))
@@ -328,22 +331,26 @@ func NewServer(ctx context.Context, cfg *viper.Viper, opts ...ServerOption) (*Se
 				sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, limiter.UnaryServerInterceptor(rl.Limiter, rl.selectors...))
 				sopts.StreamInterceptors = append(sopts.StreamInterceptors, limiter.StreamServerInterceptor(rl.Limiter, rl.selectors...))
 			}
+			sopts.Logger.Debug(ctx, "registered rate limiter(s)")
 		}
 		if len(sopts.Auth) > 0 {
 			for _, ath := range sopts.Auth {
 				sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, authenticator.UnaryServerInterceptor(ath, ath.selectors...))
 				sopts.StreamInterceptors = append(sopts.StreamInterceptors, authenticator.StreamServerInterceptor(ath, ath.selectors...))
 			}
+			sopts.Logger.Debug(ctx, "registered authenticator(s)")
 		}
 		if len(sopts.Authz) > 0 {
 			for _, athz := range sopts.Authz {
 				sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, authorizer.UnaryServerInterceptor(athz, athz.options...))
 				sopts.StreamInterceptors = append(sopts.StreamInterceptors, authorizer.StreamServerInterceptor(athz, athz.options...))
 			}
+			sopts.Logger.Debug(ctx, "registered authorizer(s)")
 		}
 		if sopts.Validation {
 			sopts.UnaryInterceptors = append(sopts.UnaryInterceptors, grpc_validator.UnaryServerInterceptor())
 			sopts.StreamInterceptors = append(sopts.StreamInterceptors, grpc_validator.StreamServerInterceptor())
+			sopts.Logger.Debug(ctx, "registered validation interceptor")
 		}
 
 		sopts.StreamInterceptors = append(sopts.StreamInterceptors, grpc_recovery.StreamServerInterceptor())
@@ -388,6 +395,10 @@ func (s *Server) Serve(ctx context.Context, services ...Service) error {
 	)
 	gwMux := runtime.NewServeMux(s.gatewayOpts...)
 	for _, handler := range s.httpRoutes {
+		s.providers.Logger.Debug(ctx, "registered custom http route", map[string]any{
+			"method": handler.Method,
+			"path":   handler.Path,
+		})
 		if err := gwMux.HandlePath(handler.Method, handler.Path, handler.Handler); err != nil {
 			return utils.WrapError(err, "failed to register custom http route")
 		}
@@ -405,6 +416,14 @@ func (s *Server) Serve(ctx context.Context, services ...Service) error {
 	}
 	if s.health != nil {
 		grpc_health_v1.RegisterHealthServer(srv, s.health)
+		s.providers.Logger.Debug(ctx, "registered grpc health check")
+	}
+	if s.cfg.GetBool("database.migrate") {
+		s.providers.Logger.Debug(ctx, "performing database migration...")
+		if err := s.providers.Database.Migrate(ctx); err != nil {
+			return utils.WrapError(err, "failed to migrate database")
+		}
+		s.providers.Logger.Debug(ctx, "performed database migration")
 	}
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%v", s.cfg.GetInt("api.port")))
 	if err != nil {
@@ -425,6 +444,7 @@ func (s *Server) Serve(ctx context.Context, services ...Service) error {
 			ExposedHeaders:   s.cfg.GetStringSlice("api.cors.exposed_headers"),
 			AllowCredentials: s.cfg.GetBool("api.cors.allow_credentials"),
 		}).Handler(gwMux)
+		s.providers.Logger.Debug(ctx, "registered cors middleware")
 	} else {
 		mux = gwMux
 	}

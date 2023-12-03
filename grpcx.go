@@ -67,6 +67,7 @@ type serverOpt struct {
 	GrpcHealthCheck    grpc_health_v1.HealthServer
 	Validation         bool
 	PaymentProcessor   providers.PaymentProcessor
+	Storage            providers.Storage
 }
 
 // ServerOption is a function that configures the server. All ServerOptions are optional.
@@ -140,6 +141,13 @@ func WithEmail(provider providers.Emailer) ServerOption {
 func WithDatabase(provider providers.Database) ServerOption {
 	return func(opt *serverOpt) {
 		opt.Database = provider
+	}
+}
+
+// WithStorage adds a storage provider
+func WithStorage(provider providers.Storage) ServerOption {
+	return func(opt *serverOpt) {
+		opt.Storage = provider
 	}
 }
 
@@ -300,6 +308,7 @@ func NewServer(ctx context.Context, cfg *viper.Viper, opts ...ServerOption) (*Se
 		Cache:            sopts.Cache,
 		Stream:           sopts.Stream,
 		PaymentProcessor: sopts.PaymentProcessor,
+		Storage:          sopts.Storage,
 	}
 
 	{

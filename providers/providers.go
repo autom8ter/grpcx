@@ -9,4 +9,5 @@ type All struct {
 	Metrics          Metrics
 	Email            Emailer
 	PaymentProcessor PaymentProcessor
+	Storage          Storage
 }

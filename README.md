@@ -14,6 +14,7 @@ It is meant to be a batteries-included framework for building enterprise-grade g
 - [x] Serve Gateway/gRPC same port(cmux)
 - [x] Flexible Provider/Interface based architecture: use the same code with different providers depending on tech stack
 - [x] Metrics(prometheus)
+- [x] File Storage dependency injection(local, gcs)
 - [x] Structured Logging(slog)
 - [x] Database Migrations(golang-migrate)
 - [x] Database dependency injection(sqlite,mysql,postgres)

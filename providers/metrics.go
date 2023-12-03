@@ -1,3 +1,5 @@
+//go:generate mockgen -destination=./mocks/metrics.go -package=mocks . Metrics
+
 package providers
 
 import (

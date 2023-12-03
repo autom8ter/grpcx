@@ -13,6 +13,7 @@ type Filesys struct {
 
 // New returns a new Filesys provider
 func New(baseDir string) *Filesys {
+	os.MkdirAll(baseDir, 0755)
 	return &Filesys{
 		baseDir: baseDir,
 	}
@@ -20,7 +21,9 @@ func New(baseDir string) *Filesys {
 
 // WriteFile writes a file to the storage provider
 func (f Filesys) WriteFile(ctx context.Context, path string, r io.ReadSeeker) error {
-	path = f.baseDir + path
+	if f.baseDir != "" {
+		path = f.baseDir + "/" + path
+	}
 	fl, err := os.Create(path)
 	if err != nil {
 		return err
@@ -35,6 +38,9 @@ func (f Filesys) WriteFile(ctx context.Context, path string, r io.ReadSeeker) er
 
 // ReadFile reads a file from the storage provider
 func (f Filesys) ReadFile(ctx context.Context, path string, w io.Writer) error {
+	if f.baseDir != "" {
+		path = f.baseDir + "/" + path
+	}
 	fl, err := os.Open(path)
 	if err != nil {
 		return err
@@ -49,5 +55,8 @@ func (f Filesys) ReadFile(ctx context.Context, path string, w io.Writer) error {
 
 // DeleteFile deletes a file
 func (f Filesys) DeleteFile(ctx context.Context, path string) error {
+	if f.baseDir != "" {
+		path = f.baseDir + "/" + path
+	}
 	return os.Remove(path)
 }

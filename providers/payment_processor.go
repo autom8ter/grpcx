@@ -1,3 +1,5 @@
+//go:generate mockgen -destination=./mocks/payment_processor.go -package=mocks . PaymentProcessor
+
 package providers
 
 import (

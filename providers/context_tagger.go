@@ -1,4 +1,4 @@
-//go:generate mockgen -destination=./mocks/context_tagger.go -package=mocks . ContextTagger
+//go:generate mockgen -destination=./mocks/tags.go -package=mocks . Tags
 
 package providers
 

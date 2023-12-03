@@ -1,3 +1,5 @@
+//go:generate mockgen -destination=./mocks/email.go -package=mocks . Email
+
 package providers
 
 import (

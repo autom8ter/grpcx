@@ -35,6 +35,9 @@ func New(ctx context.Context, connectionString, migrationsPath string) (provider
 		return nil, utils.WrapError(err, "failed to open database connection")
 	}
 	db := &sqlite{conn: conn}
+	if migrationsPath == "" {
+		return db, nil
+	}
 	m, err := migrate.New(migrationsPath, connectionString)
 	if err != nil {
 		return nil, utils.WrapError(err, "failed to create migration")

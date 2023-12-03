@@ -3,7 +3,7 @@ package grpcx
 import (
 	"context"
 	"fmt"
-	`log/slog`
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -24,7 +24,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/cors"
 	"github.com/soheilhy/cmux"
-	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health/grpc_health_v1"
@@ -77,7 +76,6 @@ type ServerOption func(opt *serverOpt)
 
 // ServiceRegistrationConfig is the config passed to a service registration function
 type ServiceRegistrationConfig struct {
-	Config      *viper.Viper
 	GrpcServer  *grpc.Server
 	RestGateway *runtime.ServeMux
 	Providers   providers.All
@@ -278,7 +276,6 @@ func WithGrpcHealthCheck(srv grpc_health_v1.HealthServer) ServerOption {
 // - Authorization (see github.com/autom8ter/protoc-gen-authorize)
 // - Rate Limiting (see github.com/autom8ter/protoc-gen-ratelimit)
 type Server struct {
-	cfg         *viper.Viper
 	health      grpc_health_v1.HealthServer
 	providers   providers.All
 	grpcOpts    []grpc.ServerOption
@@ -404,7 +401,6 @@ func (s *Server) Serve(ctx context.Context, port int, services ...Service) error
 		}
 	}
 	serviceConfig := ServiceRegistrationConfig{
-		Config:      s.cfg,
 		GrpcServer:  srv,
 		RestGateway: gwMux,
 		Providers:   s.providers,
